@@ -1,0 +1,48 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+
+# next.js / build output
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# testing
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# env and secrets
+.env
+.env*.local
+!.env.example
+
+# certificates and keys (FINA certificates must never be committed)
+*.p12
+*.pfx
+*.pem
+*.key
+*.crt
+*.cer
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# local Claude Code settings
+.claude/settings.local.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
