@@ -5,6 +5,6 @@ export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
   // `next build` collects page data through the same hook but has no runtime secrets.
   if (process.env.NEXT_PHASE === 'phase-production-build') return
-  const { getEnv } = await import('@/server/env')
-  getEnv()
+  const { getAuthEnv } = await import('@/server/env')
+  getAuthEnv()
 }

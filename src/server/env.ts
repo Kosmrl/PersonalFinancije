@@ -68,3 +68,26 @@ export function getEnv(): Env {
   cached = result.data
   return cached
 }
+
+export type AuthEnv = Env & {
+  BETTER_AUTH_SECRET: string
+  BETTER_AUTH_URL: string
+  SMTP_HOST: string
+  MAIL_FROM: string
+}
+
+/**
+ * The environment with the variables that authentication and email need (step 4 onward) made
+ * mandatory. Kept apart from getEnv() so that database-only tooling does not need them. Names the
+ * missing variables, never their values.
+ */
+export function getAuthEnv(): AuthEnv {
+  const env = getEnv()
+  const missing = (
+    ['BETTER_AUTH_SECRET', 'BETTER_AUTH_URL', 'SMTP_HOST', 'MAIL_FROM'] as const
+  ).filter((key) => !env[key])
+  if (missing.length > 0) {
+    throw new Error(`Invalid environment configuration: missing ${missing.join(', ')}`)
+  }
+  return env as AuthEnv
+}
