@@ -21,14 +21,15 @@ Phasing and the regulatory requirements are in the roadmap plan in `docs/plans/`
 
 ## Commands
 
-_Fill these in once the app is scaffolded._
-
-- dev:
-- typecheck:
-- lint:
-- test:
-- e2e:
-- build:
+- dev: `npm run dev`
+- typecheck: `npm run typecheck`
+- lint: `npm run lint`
+- test: `npm run test`
+- e2e: `npm run e2e`
+- build: `npm run build`
+- local PostgreSQL (foreground, Ctrl+C stops it): `npm run db`
+- local mail catcher (SMTP 1025, web UI and API on 1080): `npm run mail`
+- migrations: `npm run db:generate`, `npm run db:migrate`, `npm run db:studio`
 
 ## Agent team
 
@@ -69,16 +70,26 @@ This project uses a team of subagents (`.claude/agents/`), each on a model match
 - **Privacy (GDPR):** an obrtnik's OIB, name and address are personal data. Never log invoice contents, amounts, OIBs or certificate data alongside identity. Fixtures and tests use made-up data only.
 - **Compliance code follows the official specifications.** Where code implements fiscalization, e-invoice XML or KPR rules, a comment names the specification and its version.
 
+## Decisions
+
+Details and reasoning are in `docs/plans/2026-10-09-product-roadmap.md` §4–5.
+
+- **Database and ORM:** PostgreSQL 17 + Drizzle. Tenant tables use Row-Level Security plus an app-level membership check on every action.
+- **Auth:** Better Auth: email + password, email verification, TOTP 2FA, organization plugin with roles owner / accountant / member.
+- **Styling and UI kit:** Tailwind CSS v4 + shadcn/ui.
+- **Test stack:** Vitest (unit tests, plus integration tests against real PostgreSQL) and Playwright (e2e).
+- **Background jobs:** pg-boss on the same PostgreSQL.
+- **PDF (Phase 2):** @react-pdf/renderer, with bwip-js for HUB3 and QR codes.
+- **E-invoice exchange:** integrate with an existing information intermediary through an adapter; don't become one.
+- **Rounding:** each line total is computed exactly with decimal.js and rounded once to cents with ROUND_HALF_UP (ties away from zero). The document total is the sum of line totals. Splits use the largest-remainder method.
+- **Retention:** 11 years after the year of issue (pending confirmation by a tax advisor).
+- **Local development database:** a project-local PostgreSQL 17 through the `embedded-postgres` npm package, with no Docker or system install. Integration tests start their own throwaway instance. Test emails go to a local npm-based mail catcher.
+
 ## Open decisions
 
 - Product name
-- Database and ORM
-- Auth method
-- Hosting (EU region, for GDPR) and background job runner (fiscalization retries, e-invoice polling)
-- E-invoice exchange: integrate with an existing information intermediary's API, or become one
-- PDF generation
-- Styling and UI kit
-- Test stack (suggested default: Vitest for unit tests, Playwright for e2e)
+- Hosting provider (roadmap recommends AWS Frankfurt; Scaleway is the EU-owned alternative)
+- Which intermediary (ePoslovanje or moj-eRačun, after commercial talks)
 - Pricing and billing
 
 ## Plans

@@ -46,3 +46,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# project-local PostgreSQL data (npm run db)
+.data/
