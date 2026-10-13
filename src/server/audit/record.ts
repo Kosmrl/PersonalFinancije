@@ -68,19 +68,24 @@ export type AuditAction = keyof ActionEntity
 
 // requestId is deliberately not an input: callers (and request headers) could put anything in it.
 // The column stays NULL until a server-generated correlation id exists.
-export type AuditEntry<A extends AuditAction = AuditAction> = {
-  action: A
-  entityType: ActionEntity[A]
-  /** A UUID or a Better Auth id. Never an e-mail, OIB or name (see ENTITY_ID). */
-  entityId: string
-  /** Field NAMES (columns of the entity) that changed. Never values (CLAUDE.md, Privacy). */
-  changedFields?: readonly EntityFields[ActionEntity[A]][]
-}
+// Distributive over the action: a union-typed `action` is checked member by member, so a
+// conditional action cannot be paired with an entityType that fits only one of its branches.
+export type AuditEntry<A extends AuditAction = AuditAction> = A extends AuditAction
+  ? {
+      action: A
+      entityType: ActionEntity[A]
+      /** A UUID or a Better Auth id. Never an e-mail, OIB or name (see AUTH_ID). */
+      entityId: string
+      /** Field NAMES (columns of the entity) that changed. Never values (CLAUDE.md, Privacy). */
+      changedFields?: readonly EntityFields[ActionEntity[A]][]
+    }
+  : never
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-// Better Auth ids are random alphanumeric strings. All-digit strings are refused (an OIB is 11
-// digits) and `@` never matches the class (an e-mail address).
-const AUTH_ID = /^(?!\d+$)[A-Za-z0-9]{16,64}$/
+// Better Auth 1.7.7 ids are exactly 32 random alphanumeric characters (auth.ts sets no custom
+// generateId). All-digit strings are refused, and the fixed length keeps an IBAN (21 chars for
+// HR), an OIB (11 digits) and an e-mail address (`@`) out.
+const AUTH_ID = /^(?!\d+$)[A-Za-z0-9]{32}$/
 
 function isEntityId(value: unknown): boolean {
   return typeof value === 'string' && (UUID.test(value) || AUTH_ID.test(value))

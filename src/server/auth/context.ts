@@ -54,11 +54,30 @@ export type OrgContext = {
 // withTenant and recordAudit call assertOrgContext, and a copy is a new object, so it fails.
 const mintedContexts = new WeakSet<object>()
 
+/** Thrown for a context that was not minted here; recognisable by name in logs. */
+export class OrgContextError extends Error {
+  constructor() {
+    super('Invalid organization context')
+    this.name = 'OrgContextError'
+  }
+}
+
 /** Throws unless `ctx` is the very object minted by requireOrgContext. The message holds no values. */
 export function assertOrgContext(ctx: unknown): asserts ctx is OrgContext {
   if (typeof ctx !== 'object' || ctx === null || !mintedContexts.has(ctx)) {
-    throw new Error('Invalid organization context')
+    throw new OrgContextError()
   }
+}
+
+/**
+ * The organization id of a verified context. Better Auth tables (member, invitation,
+ * organization) have no row-level security and are read on the plain pool, so a query there
+ * trusts whatever organization id it is given. Every plain-pool query that takes a ctx must get
+ * the id through this function, never from `ctx.orgId` directly: it throws for a forged copy.
+ */
+export function orgIdOf(ctx: OrgContext): string {
+  assertOrgContext(ctx)
+  return ctx.orgId
 }
 
 function mint(fields: Omit<OrgContext, typeof orgContextBrand>): OrgContext {
@@ -72,7 +91,9 @@ function mint(fields: Omit<OrgContext, typeof orgContextBrand>): OrgContext {
  * a production import of it is useless.
  */
 export function mintOrgContextForTests(fields: Omit<OrgContext, typeof orgContextBrand>): OrgContext {
-  if (process.env.VITEST !== 'true') throw new Error('Test-only function')
+  if (process.env.NODE_ENV === 'production' || process.env.VITEST !== 'true') {
+    throw new Error('Test-only function')
+  }
   return mint(fields)
 }
 

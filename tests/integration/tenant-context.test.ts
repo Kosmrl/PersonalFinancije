@@ -158,7 +158,7 @@ describe('tenant context helpers', () => {
         audit.recordAudit(tx, ctx, {
           action: 'customer.updated',
           entityType: 'customer',
-          entityId: 'c1c1c1c1c1c1c1c1c1c1',
+          entityId: 'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1',
           changedFields: ['name', 'email'],
         }),
       )
@@ -169,7 +169,7 @@ describe('tenant context helpers', () => {
           actor_user_id: string
           request_id: string | null
         }>(
-          `select action, changed_fields, actor_user_id, request_id from audit_log where entity_id = 'c1c1c1c1c1c1c1c1c1c1'`,
+          `select action, changed_fields, actor_user_id, request_id from audit_log where entity_id = 'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1'`,
         ),
       )
       expect(rows).toEqual([
@@ -189,7 +189,7 @@ describe('tenant context helpers', () => {
           await audit.recordAudit(tx, ctx, {
             action: 'item.created',
             entityType: 'item',
-            entityId: 'rb1rb1rb1rb1rb1rb1rb1',
+            entityId: 'rb1rb1rb1rb1rb1rb1rb1rb1rb1rb1rb',
           })
           throw new Error('boom')
         }),
@@ -209,7 +209,7 @@ describe('tenant context helpers', () => {
             audit.recordAudit(tx, ctx, {
               action: 'customer.updated',
               entityType: 'customer',
-              entityId: 'bad1bad1bad1bad1bad1',
+              entityId: 'bad1bad1bad1bad1bad1bad1bad1bad1',
               // Deliberately not a column name; the cast is what a bug would do.
               changedFields: [value as never],
             }),
@@ -229,7 +229,7 @@ describe('tenant context helpers', () => {
           audit.recordAudit(tx, testOrgContext({ orgId: orgB.id, userId: userA.id }), {
             action: 'customer.created',
             entityType: 'customer',
-            entityId: 'x1x1x1x1x1x1x1x1x1x1',
+            entityId: 'x1x1x1x1x1x1x1x1x1x1x1x1x1x1x1x1',
           }),
         ),
       ).rejects.toThrow()

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { assertOrgContext } from '@/server/auth/context'
+import { assertOrgContext, OrgContextError, orgIdOf } from '@/server/auth/context'
 import type { Tx } from '@/server/db/tenant'
 import { testOrgContext } from '../../../tests/helpers/org-context'
 import { recordAudit } from './record'
@@ -129,6 +129,13 @@ describe('recordAudit: changedFields', () => {
         entityType: 'customer',
         entityId: ID,
       }))
+    void (() =>
+      // @ts-expect-error a conditional action must not pair with an entityType of one branch
+      recordAudit(tx, ctx, {
+        action: Math.random() > 0.5 ? 'customer.created' : 'item.created',
+        entityType: 'item',
+        entityId: ID,
+      }))
     expect(true).toBe(true)
   })
 })
@@ -149,6 +156,9 @@ describe('recordAudit: entityId', () => {
     ['a long all-digit string', '1234567890123456'],
     ['a name', 'Ana Horvat'],
     ['a short id', 'c_1'],
+    ['an IBAN', FAKE_IBAN],
+    ['a 31-character id', ID.slice(1)],
+    ['a 33-character id', ID + 'a'],
     ['an empty string', ''],
   ])('rejects %s as an entityId without repeating it', async (_label, value) => {
     const { tx, values } = stubTx()
@@ -194,6 +204,24 @@ describe('OrgContext runtime brand', () => {
   it('accepts a minted context and freezes it', () => {
     expect(() => assertOrgContext(ctx)).not.toThrow()
     expect(Object.isFrozen(ctx)).toBe(true)
+  })
+
+  it.each(['spread', 'assign', 'cast'] as const)('orgIdOf rejects a %s copy', (kind) => {
+    expect(() => orgIdOf(forged()[kind])).toThrow(OrgContextError)
+    expect(() => orgIdOf(forged()[kind])).toThrow(expect.objectContaining({ name: 'OrgContextError' }))
+  })
+
+  it('orgIdOf returns the id of a minted context', () => {
+    expect(orgIdOf(ctx)).toBe('o_1')
+  })
+
+  it('the test minter refuses to run in production', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    try {
+      expect(() => testOrgContext({ orgId: 'o_1' })).toThrow('Test-only function')
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('the test minter refuses to run outside Vitest', () => {

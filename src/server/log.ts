@@ -126,7 +126,7 @@ function describeError(error: Error): Record<string, unknown> {
   // are logged. The code is looked up along `.cause`, where the driver's SQLSTATE lives.
   // Debug a failure by its code.
   const code = errorCode(error)
-  return { name: scrub(error.name), ...(code !== undefined ? { code: scrub(code) } : {}) }
+  return { name: typeof error.name === 'string' ? scrub(error.name) : 'Error', ...(code !== undefined ? { code: scrub(code) } : {}) }
 }
 
 function threshold(): number {

@@ -79,18 +79,27 @@ const bannedTenantSetting = [
 
 // The patterns are regexes so that `.ts`/`.js` suffixes and relative paths match as well.
 const dbAccessPatterns = {
-  regex: '(^|/)db/(client|tenant)(\.[cm]?[jt]sx?)?$',
+  regex: '(^|/)db(/+\\.)*/+(client|tenant)(\\.[cm]?[jt]sx?)?$',
   message:
     'Import the database client and withTenant only from src/server/db, auth, audit, queries.ts or actions.ts files. Everything else goes through a queries.ts or actions.ts module.',
 }
 const schemaPatterns = {
-  regex: '(^|/)db/schema(/.*|\.[cm]?[jt]sx?)?$',
+  regex: '(^|/)db(/+\\.)*/+schema(/.*|\\.[cm]?[jt]sx?)?$',
   message:
     'Database schema modules are server-only; src/app and src/components must go through a queries.ts or actions.ts module (and types it exports).',
 }
 const testHelperPatterns = {
   group: ['**/tests/**', '@/tests/**', 'tests/**'],
   message: 'Test helpers (tests/**) must never be imported from application code.',
+}
+
+// The test-only OrgContext minter is importable only by tests and by context.ts itself. The group
+// covers the alias and relative spellings of the module.
+const testMinterPatterns = {
+  group: ['@/server/auth/context', '**/auth/context', '**/auth/context.*', './context', './context.*'],
+  importNames: ['mintOrgContextForTests'],
+  message:
+    'mintOrgContextForTests is for tests only (use tests/helpers/org-context.ts). Application code gets an OrgContext from requireOrgContext.',
 }
 
 // Dynamic import() bypasses no-restricted-imports.
@@ -100,12 +109,19 @@ const bannedDynamicDbImport = [
     message:
       'Do not import the database client, withTenant or the schema dynamically; use a queries.ts or actions.ts module.',
   },
+  {
+    // import(variable) and import(`${x}`) would hide a db module from the selector above.
+    selector: "ImportExpression[source.type!='Literal']",
+    message:
+      'Dynamic import() needs a string literal specifier, so the import boundaries can be checked. Use a static import or a literal path.',
+  },
 ]
 
 // OrgContext is minted only by requireOrgContext (src/server/auth/context.ts). A cast would
-// forge one; the runtime brand (assertOrgContext) is the second line of defence.
+// forge one. This lint rule only catches the plain `as OrgContext` spelling (not `as unknown as`
+// chains, aliases or spreads); the runtime brand (assertOrgContext) is the real control.
 const orgCastMessage =
-  'Never cast to OrgContext: only requireOrgContext in src/server/auth/context.ts mints one (tests use tests/helpers/org-context.ts).'
+  'Do not cast to OrgContext: only requireOrgContext in src/server/auth/context.ts mints one (tests use tests/helpers/org-context.ts). This rule is a tripwire, not protection; the runtime brand is the real control.'
 const bannedOrgContextCast = [
   {
     selector: "TSAsExpression > TSTypeReference[typeName.name='OrgContext']",
@@ -188,8 +204,8 @@ const eslintConfig = defineConfig([
     // Application code never imports test helpers. Later blocks that set no-restricted-imports
     // repeat this pattern, because their options replace this one.
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['**/*.test.{ts,tsx}'],
-    rules: { 'no-restricted-imports': ['error', { patterns: [testHelperPatterns] }] },
+    ignores: ['**/*.test.{ts,tsx}', 'src/server/auth/context.ts'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [testHelperPatterns, testMinterPatterns] }] },
   },
   {
     // Import boundaries: the database client and withTenant are reachable only from the data
@@ -206,13 +222,13 @@ const eslintConfig = defineConfig([
       'scripts/**',
       '**/*.test.{ts,tsx}',
     ],
-    rules: { 'no-restricted-imports': ['error', { patterns: [dbAccessPatterns, testHelperPatterns] }] },
+    rules: { 'no-restricted-imports': ['error', { patterns: [dbAccessPatterns, testHelperPatterns, testMinterPatterns] }] },
   },
   {
     files: ['src/app/**/*.{ts,tsx}', 'src/components/**/*.{ts,tsx}'],
     ignores: ['**/*.test.{ts,tsx}'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: [dbAccessPatterns, schemaPatterns, testHelperPatterns] }],
+      'no-restricted-imports': ['error', { patterns: [dbAccessPatterns, schemaPatterns, testHelperPatterns, testMinterPatterns] }],
     },
   },
   {
