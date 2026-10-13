@@ -19,7 +19,7 @@ export function invitationTemplate(input: {
     heading: 'Pozvani ste u obrt',
     paragraphs: [
       `Pozvani ste da se pridružite obrtu ${input.organizationName} u aplikaciji ${input.appName} kao ${role}.`,
-      'Za prihvaćanje pozivnice potreban vam je račun s potvrđenom adresom e-pošte na koju je pozivnica poslana.',
+      'Za prihvaćanje pozivnice prijavite se računom čija je adresa e-pošte potvrđena, a to je adresa na koju je pozivnica poslana. Ako još nemate račun, otvorite ga s tom adresom.',
     ],
     actionLabel: 'Otvori pozivnicu',
     actionUrl: input.url,

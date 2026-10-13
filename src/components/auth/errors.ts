@@ -27,11 +27,14 @@ export function authErrorMessage(error: AuthError, fallback = GENERIC_ERROR): st
 }
 
 /**
- * Only same-site paths under /app are accepted as post-sign-in destinations (no open redirect).
+ * Only same-site paths under /app (and the invitation page /pozivnica/<id>) are accepted as post-sign-in destinations (no open redirect).
  * The value is parsed the way a browser would (which strips tabs and newlines), and the result
  * is rebuilt from the parsed parts.
  */
-export function safeNextPath(next: string | string[] | null | undefined, fallback = '/app'): string {
+export function safeNextPath(
+  next: string | string[] | null | undefined,
+  fallback = '/app',
+): string {
   if (typeof next !== 'string' || !next) return fallback
   // Control characters and backslashes are never legitimate here.
   if (/[\u0000-\u001f\u007f\\]/.test(next)) return fallback
@@ -43,7 +46,10 @@ export function safeNextPath(next: string | string[] | null | undefined, fallbac
     return fallback
   }
   if (url.origin !== BASE) return fallback
-  if (url.pathname !== '/app' && !url.pathname.startsWith('/app/')) return fallback
+  const inApp = url.pathname === '/app' || url.pathname.startsWith('/app/')
+  // The invitation page: sign in (or register) from it, then come back to it.
+  const invitation = /^\/pozivnica\/[A-Za-z0-9_-]{1,64}$/.test(url.pathname)
+  if (!inApp && !invitation) return fallback
   return url.pathname + url.search + url.hash
 }
 

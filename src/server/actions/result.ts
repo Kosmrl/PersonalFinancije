@@ -1,5 +1,6 @@
 import 'server-only'
 import { unstable_rethrow } from 'next/navigation'
+import { pgErrorCode } from '@/server/db/errors'
 import { log } from '@/server/log'
 import type { AuditAction } from '@/server/audit/record'
 
@@ -48,6 +49,7 @@ export type AuthActionName =
   | 'auth.verify_email'
   | 'auth.reset_password'
   | 'auth.two_factor'
+  | 'member.invitation_declined'
 export type ActionName = AuditAction | AuthActionName
 
 export async function runAction<T>(
@@ -58,6 +60,12 @@ export async function runAction<T>(
     return await fn()
   } catch (error) {
     unstable_rethrow(error)
+    // 55P03: a row lock was not granted within lock_timeout (member changes of one organization
+    // queue behind each other). Expected under contention: a retry message, not an error.
+    if (pgErrorCode(error) === '55P03') {
+      log.warn('server action lock timeout', { action: name })
+      return fail(GENERIC_ERROR_MESSAGE)
+    }
     log.error('server action failed', { action: name, error })
     return fail(GENERIC_ERROR_MESSAGE)
   }

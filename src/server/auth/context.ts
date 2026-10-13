@@ -90,7 +90,9 @@ function mint(fields: Omit<OrgContext, typeof orgContextBrand>): OrgContext {
  * Test-only minter, used through tests/helpers/org-context.ts. Refuses to run outside Vitest, so
  * a production import of it is useless.
  */
-export function mintOrgContextForTests(fields: Omit<OrgContext, typeof orgContextBrand>): OrgContext {
+export function mintOrgContextForTests(
+  fields: Omit<OrgContext, typeof orgContextBrand>,
+): OrgContext {
   if (process.env.NODE_ENV === 'production' || process.env.VITEST !== 'true') {
     throw new Error('Test-only function')
   }

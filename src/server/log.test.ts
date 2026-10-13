@@ -269,7 +269,9 @@ describe('log: errors', () => {
 
 describe('log: odd errors', () => {
   it('does not throw when an error name is not a string', () => {
-    const error = Object.assign(new Error('boom'), { name: { toString: () => 'x' } as unknown as string })
+    const error = Object.assign(new Error('boom'), {
+      name: { toString: () => 'x' } as unknown as string,
+    })
     expect(() => log.error('failed', { error })).not.toThrow()
     expect(logged().error).toEqual({ name: 'Error' })
   })

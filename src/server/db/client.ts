@@ -18,7 +18,13 @@ const globalForDb = globalThis as unknown as { pfPool?: Pool; pfDb?: Database }
 
 export function getPool(): Pool {
   if (!globalForDb.pfPool) {
-    const pool = new Pool({ connectionString: getEnv().DATABASE_URL, max: 10 })
+    const pool = new Pool({
+      connectionString: getEnv().DATABASE_URL,
+      max: 10,
+      // Fail instead of waiting forever for a free client (defence in depth against pool
+      // exhaustion; actions never hold a client while waiting for another one).
+      connectionTimeoutMillis: 5000,
+    })
     // An idle client can error when the server restarts; without a listener Node would crash.
     pool.on('error', (error) => log.error('database pool error', { error }))
     globalForDb.pfPool = pool

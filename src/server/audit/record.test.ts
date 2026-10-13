@@ -196,7 +196,11 @@ describe('OrgContext runtime brand', () => {
   it.each(['spread', 'assign', 'cast'] as const)('recordAudit rejects a %s copy', async (kind) => {
     const { tx, values } = stubTx()
     await expect(
-      recordAudit(tx, forged()[kind], { action: 'item.archived', entityType: 'item', entityId: ID }),
+      recordAudit(tx, forged()[kind], {
+        action: 'item.archived',
+        entityType: 'item',
+        entityId: ID,
+      }),
     ).rejects.toThrow('Invalid organization context')
     expect(values).not.toHaveBeenCalled()
   })
@@ -208,7 +212,9 @@ describe('OrgContext runtime brand', () => {
 
   it.each(['spread', 'assign', 'cast'] as const)('orgIdOf rejects a %s copy', (kind) => {
     expect(() => orgIdOf(forged()[kind])).toThrow(OrgContextError)
-    expect(() => orgIdOf(forged()[kind])).toThrow(expect.objectContaining({ name: 'OrgContextError' }))
+    expect(() => orgIdOf(forged()[kind])).toThrow(
+      expect.objectContaining({ name: 'OrgContextError' }),
+    )
   })
 
   it('orgIdOf returns the id of a minted context', () => {

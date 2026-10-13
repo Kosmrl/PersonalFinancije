@@ -7,7 +7,6 @@ import { organization, twoFactor } from 'better-auth/plugins'
 import { getDb } from '@/server/db/client'
 import * as schema from '@/server/db/schema'
 import { sendMail } from '@/server/email/transport'
-import { invitationTemplate } from '@/server/email/templates/invitation'
 import {
   existingAccountTemplate,
   resetPasswordTemplate,
@@ -40,10 +39,51 @@ function createAuth() {
     // multi-step operations (sign-up, organization creation with its owner member) atomic.
     database: drizzleAdapter(getDb(), { provider: 'pg', schema, transaction: true }),
 
-    // HTTP-level blocks only; server-side auth.api.createOrganization stays available.
-    // Organizations are created by the app (step 6) and never deleted (retention).
-    // TODO(step 6): decide on the member and invitation paths.
-    disabledPaths: ['/organization/create', '/organization/delete'],
+    // HTTP-level blocks (404) only: the router checks this list for incoming requests, while
+    // server-side auth.api.* calls are not affected. EVERY /organization/* route is closed: writes
+    // would skip authorization, last-owner serialization and the audit row (review item S4), and
+    // reads (check-slug, get-full-organization, list-members, ...) are slug/membership oracles
+    // (review item N1). The app reads this data itself (src/server/org/queries.ts) and uses no
+    // authClient.organization.* call. A test enumerates the plugin's endpoints and fails when a new
+    // /organization/* path is not listed here (tests/integration/org-actions.test.ts).
+    disabledPaths: [
+      '/organization/accept-invitation',
+      '/organization/add-team-member',
+      '/organization/cancel-invitation',
+      '/organization/check-slug',
+      '/organization/create',
+      '/organization/create-role',
+      '/organization/create-team',
+      '/organization/delete',
+      '/organization/delete-role',
+      '/organization/get-active-member',
+      '/organization/get-active-member-role',
+      '/organization/get-full-organization',
+      '/organization/get-invitation',
+      '/organization/get-organization',
+      '/organization/get-role',
+      '/organization/has-permission',
+      '/organization/invite-member',
+      '/organization/leave',
+      '/organization/list',
+      '/organization/list-invitations',
+      '/organization/list-members',
+      '/organization/list-roles',
+      '/organization/list-team-members',
+      '/organization/list-teams',
+      '/organization/list-user-invitations',
+      '/organization/list-user-teams',
+      '/organization/reject-invitation',
+      '/organization/remove-member',
+      '/organization/remove-team',
+      '/organization/remove-team-member',
+      '/organization/set-active',
+      '/organization/set-active-team',
+      '/organization/update',
+      '/organization/update-member-role',
+      '/organization/update-role',
+      '/organization/update-team',
+    ],
 
     emailAndPassword: {
       enabled: true,
@@ -128,17 +168,8 @@ function createAuth() {
         disableOrganizationDeletion: true,
         // The invitation page requires a verified email, so the invited address is proven.
         requireEmailVerificationOnInvitation: true,
-        sendInvitationEmail: async (data) => {
-          await sendMail({
-            to: data.email,
-            ...invitationTemplate({
-              appName,
-              organizationName: data.organization.name,
-              role: data.role,
-              url: `${baseUrl}/pozivnica/${data.id}`,
-            }),
-          })
-        },
+        // No sendInvitationEmail: Better Auth's invitation endpoints are disabled; the
+        // inviteMember action (server/org/actions.ts) writes the row and sends the email itself.
       }),
       twoFactor({ issuer: appName }),
       // Must be the last plugin: it sets cookies from server actions.

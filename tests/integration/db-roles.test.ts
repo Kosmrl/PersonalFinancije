@@ -1,6 +1,16 @@
+import { randomBytes } from 'node:crypto'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import pg from 'pg'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
-import { applyInitSql, CLUSTER_SUPERUSER } from '../../scripts/db/embedded.ts'
+import {
+  applyInitSql,
+  Cluster,
+  CLUSTER_SUPERUSER,
+  connectionUrl,
+  findFreePort,
+} from '../../scripts/db/embedded.ts'
 
 // Smoke test for the local database plumbing (build-sequence step 2): the throwaway PostgreSQL
 // started by global-setup.ts accepts connections as the runtime role, and that role cannot
@@ -117,16 +127,46 @@ describe('database roles', () => {
     expect(rows[0]?.lower).toBe('čćžšđ')
     expect(rows[0]?.sorted).toEqual(['c', 'č', 'ć', 'd', 'z', 'ž'])
   })
+})
 
-  // Runs last in this file. It briefly gives pf_app extra rights and checks that a re-run of
-  // init.sql (what every `npm run db` does) takes them away again.
-  it('re-running init.sql repairs stray grants to pf_app and an old pf_definer grant', async () => {
-    const admin = inject('clusterAdmin')
+// Roles are cluster-wide, so the repair test below (which briefly gives pf_app BYPASSRLS and
+// strips its CONNECT right) runs on its OWN throwaway cluster. On the shared cluster it made
+// other test files, running in parallel, bypass row-level security or fail to connect.
+describe('re-running init.sql on a throwaway cluster of its own', () => {
+  const superuserPassword = randomBytes(12).toString('hex')
+  const ownerPassword = randomBytes(12).toString('hex')
+  const appPassword = randomBytes(12).toString('hex')
+  let cluster: Cluster | undefined
+  let port: number
+
+  beforeAll(async () => {
+    // The port is found first (nothing to clean up if that fails); the Cluster is created right
+    // after the temp dir, so stop() (which removes it) runs on every later failure.
+    port = await findFreePort()
+    const dataDir = await mkdtemp(path.join(tmpdir(), 'pf-test-pg-'))
+    cluster = new Cluster({ dataDir, port, superuserPassword, throwaway: true })
+    try {
+      await cluster.initialise()
+      await cluster.start()
+      await applyInitSql(
+        { port, superuserPassword },
+        { ownerPassword, appPassword, databases: ['pf_test'] },
+      )
+    } catch (error) {
+      await cluster.stop().catch(() => {})
+      throw error
+    }
+  })
+  afterAll(async () => {
+    await cluster?.stop()
+  })
+
+  it('repairs stray grants to pf_app and an old pf_definer grant', async () => {
     const superuser = new pg.Client({
       host: '127.0.0.1',
-      port: admin.port,
+      port,
       user: CLUSTER_SUPERUSER,
-      password: admin.superuserPassword,
+      password: superuserPassword,
       database: 'postgres',
     })
     await superuser.connect()
@@ -136,12 +176,10 @@ describe('database roles', () => {
       await superuser.query('GRANT pf_definer TO pf_owner WITH INHERIT TRUE')
       await superuser.query('ALTER ROLE pf_app BYPASSRLS')
 
-      // Same passwords as the first run: other test files keep connecting with them.
-      await applyInitSql(admin, {
-        ownerPassword: new URL(inject('ownerDatabaseUrl')).password,
-        appPassword: new URL(inject('databaseUrl')).password,
-        databases: ['pf_test'],
-      })
+      await applyInitSql(
+        { port, superuserPassword },
+        { ownerPassword, appPassword, databases: ['pf_test'] },
+      )
 
       const { rows } = await superuser.query<{
         app_member: boolean
@@ -171,7 +209,14 @@ describe('database roles', () => {
       })
 
       // The role still logs in with its (re-applied) verifier.
-      const again = new pg.Client({ connectionString: inject('databaseUrl') })
+      const again = new pg.Client({
+        connectionString: connectionUrl({
+          user: 'pf_app',
+          password: appPassword,
+          port,
+          database: 'pf_test',
+        }),
+      })
       await again.connect()
       await again.end()
     } finally {

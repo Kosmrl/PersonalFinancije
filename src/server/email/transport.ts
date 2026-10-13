@@ -21,6 +21,10 @@ function getTransporter(): Transporter {
       // Port 465 is implicit TLS; everything else upgrades with STARTTLS when offered. The local
       // catcher speaks plain SMTP.
       secure: env.SMTP_PORT === '465',
+      // A hung SMTP server must not hold a request (or an invitation action) open indefinitely.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
       // In production, never fall back to plain SMTP if STARTTLS is not offered.
       ...(env.NODE_ENV === 'production' ? { requireTLS: true } : {}),
       ...(env.SMTP_USER && env.SMTP_PASS

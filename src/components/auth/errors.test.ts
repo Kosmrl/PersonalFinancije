@@ -34,6 +34,22 @@ describe('safeNextPath', () => {
     expect(safeNextPath('/app/racuni?x=1&y=2#top')).toBe('/app/racuni?x=1&y=2#top')
   })
 
+  it('accepts only the invitation page outside /app', () => {
+    expect(safeNextPath('/pozivnica/abc123_DEF-9')).toBe('/pozivnica/abc123_DEF-9')
+    for (const input of [
+      '/pozivnica',
+      '/pozivnica/',
+      '/pozivnica/a/b',
+      '/pozivnica/..%2f',
+      '/pozivnica/a?x=1/../',
+    ]) {
+      const out = safeNextPath(input)
+      expect(out === '/app' || out.startsWith('/pozivnica/')).toBe(true)
+    }
+    expect(safeNextPath('/pozivnica/a/b')).toBe('/app')
+    expect(safeNextPath('/pozivnica/')).toBe('/app')
+  })
+
   it('only ever returns /app paths', () => {
     const inputs = ['/app', '/app/x?y=1', '/app/..//evil.com', '/app/%2e%2e/other', '/app@evil.com']
     for (const input of inputs) {

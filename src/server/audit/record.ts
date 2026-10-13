@@ -23,7 +23,7 @@ const TABLE_FIELDS = {
 const EXPLICIT_FIELDS = {
   organization: ['name', 'slug'],
   member: ['role'],
-  invitation: ['email', 'role', 'status'],
+  invitation: ['email', 'role', 'status', 'expiresAt'],
 } as const
 
 const ENTITY_FIELDS: Record<AuditEntity, readonly string[]> = {

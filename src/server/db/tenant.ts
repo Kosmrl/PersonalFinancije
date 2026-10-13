@@ -33,6 +33,9 @@ export async function withTenant<T>(ctx: OrgContext, fn: (tx: Tx) => Promise<T>)
   if (!ctx.orgId) throw new Error('withTenant requires an organization id')
   return getDb().transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.org_id', ${ctx.orgId}, true)`)
+    // Nothing waits for a lock longer than 5 s (SQLSTATE 55P03; runAction answers with the generic
+    // retry message): a stuck lock must not hold a pool connection indefinitely.
+    await tx.execute(sql`set local lock_timeout = '5s'`)
     return fn(tx)
   })
 }
