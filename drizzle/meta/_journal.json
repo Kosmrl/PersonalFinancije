@@ -36,6 +36,13 @@
       "when": 1791877189933,
       "tag": "0004_auth_uniqueness",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791878065835,
+      "tag": "0005_tenant_hardening",
+      "breakpoints": true
     }
   ]
 }

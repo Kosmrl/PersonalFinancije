@@ -45,6 +45,9 @@ export const items = pgTable(
       sql`lower(${table.name})`,
     ),
     check('items_unit_price_non_negative', sql`${table.unitPrice} >= 0`),
+    // Structural formats (defence in depth); a NULL kpd_code passes.
+    check('items_currency_format', sql`${table.currency} ~ '^[A-Z]{3}$'`),
+    check('items_kpd_code_format', sql`${table.kpdCode} ~ '^[0-9]{6}$'`),
   ],
 )
 

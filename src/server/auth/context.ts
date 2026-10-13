@@ -31,12 +31,21 @@ export type AuthedUser = Awaited<ReturnType<typeof requireUser>>['user']
 export const ORG_ROLES = ['owner', 'accountant', 'member'] as const
 export type OrgRole = (typeof ORG_ROLES)[number]
 
-/** The verified tenant context: pass it to withTenant, recordAudit and the queries. */
+// Type-level brand: the symbol is declared but never exists at runtime and is not exported, so
+// only code in this module can write the property without a cast. A bare `{ orgId }` object
+// does not satisfy OrgContext, so withTenant cannot be called with a made-up organization.
+declare const orgContextBrand: unique symbol
+
+/**
+ * The verified tenant context: pass it to withTenant, recordAudit and the queries. Only
+ * requireOrgContext produces one (tests use tests/helpers/org-context.ts).
+ */
 export type OrgContext = {
-  orgId: string
-  orgSlug: string
-  userId: string
-  role: OrgRole
+  readonly orgId: string
+  readonly orgSlug: string
+  readonly userId: string
+  readonly role: OrgRole
+  readonly [orgContextBrand]: true
 }
 
 // Better Auth stores a member's role as a string that may list several roles separated by commas.
@@ -75,5 +84,7 @@ export async function requireOrgContext(
   const role = effectiveRole(row.role)
   if (!role || (options.roles && !options.roles.includes(role))) return forbidden()
 
-  return { ok: true, ctx: { orgId: row.orgId, orgSlug: row.orgSlug, userId: user.id, role } }
+  // The only place a context is minted: the membership was just read from the database.
+  const ctx = { orgId: row.orgId, orgSlug: row.orgSlug, userId: user.id, role } as OrgContext
+  return { ok: true, ctx }
 }

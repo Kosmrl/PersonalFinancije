@@ -38,6 +38,9 @@ export const obrtProfiles = pgTable(
   (table) => [
     // MVP: only pausalisti outside the VAT system (plan, "obrt_profiles").
     check('obrt_profiles_not_in_vat_system', sql`${table.inVatSystem} = false`),
+    // Structural format only (defence in depth); the OIB check digit is validated in the actions.
+    check('obrt_profiles_oib_format', sql`${table.oib} ~ '^[0-9]{11}$'`),
+    check('obrt_profiles_country_code_format', sql`${table.countryCode} ~ '^[A-Z]{2}$'`),
   ],
 )
 

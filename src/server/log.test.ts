@@ -267,6 +267,21 @@ describe('log: errors', () => {
   })
 })
 
+describe('log: wrapped errors', () => {
+  it('logs the code found in .cause, never the wrapper message or params', async () => {
+    const { DrizzleQueryError } = await import('drizzle-orm/errors')
+    const cause = Object.assign(new Error(`key (oib)=(${FAKE_OIB}) exists`), { code: '23505' })
+    const error = new DrizzleQueryError(
+      'insert into customers (oib) values ($1)',
+      [FAKE_OIB],
+      cause,
+    )
+    log.error('query failed', { error })
+    expect(logged().error).toEqual({ name: 'Error', code: '23505' })
+    expect(JSON.stringify(lines)).not.toContain(FAKE_OIB)
+  })
+})
+
 describe('log: levels', () => {
   it('writes to the matching console method and honours LOG_LEVEL', () => {
     vi.stubEnv('LOG_LEVEL', 'warn')

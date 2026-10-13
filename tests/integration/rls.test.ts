@@ -57,11 +57,35 @@ describe('row-level security', () => {
   })
 
   it.each(TABLES)('%s returns 0 rows without a tenant context', async (table) => {
+    // Not vacuous: the table does hold rows, visible under a context.
+    const withContext = await asTenant(app, a.id, (c) => c.query(`select * from ${table}`))
+    expect(withContext.rowCount).toBeGreaterThan(0)
+
     const rows = await asTenant(app, null, (c) => c.query(`select * from ${table}`))
     expect(rows.rowCount).toBe(0)
     // A plain autocommit query (no transaction, setting never touched) behaves the same.
     const plain = await app.query(`select * from ${table}`)
     expect(plain.rowCount).toBe(0)
+  })
+
+  it.each(TABLES)('%s: an empty app.org_id matches nothing (N3)', async (table) => {
+    const rows = await asTenant(app, '', (c) => c.query(`select * from ${table}`))
+    expect(rows.rowCount).toBe(0)
+  })
+
+  it('an empty app.org_id cannot write a row whose organization_id is empty (N3)', async () => {
+    // audit_log has no foreign key, so a row with organization_id '' is storable in principle;
+    // the policy must not treat '' = '' as a match.
+    expect(
+      await sqlState(
+        asTenant(app, '', (c) =>
+          c.query(
+            `insert into audit_log (organization_id, actor_user_id, action, entity_type, entity_id)
+             values ('', 'u', 'customer.created', 'customer', 'c')`,
+          ),
+        ),
+      ),
+    ).toBe(RLS_VIOLATION)
   })
 
   it('the tenant context does not leak to the next transaction on a pooled connection', async () => {
@@ -170,6 +194,8 @@ describe('row-level security', () => {
   })
 
   it('pf_owner is subject to FORCE RLS too: no rows without a context', async () => {
+    const visible = await asTenant(app, a.id, (c) => c.query('select * from customers'))
+    expect(visible.rowCount).toBeGreaterThan(0)
     const { rowCount } = await owner.query('select * from customers')
     expect(rowCount).toBe(0)
   })

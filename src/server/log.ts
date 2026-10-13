@@ -1,4 +1,5 @@
 import 'server-only'
+import { errorCode } from './db/errors'
 
 // Minimal structured logger: one JSON object per line on the console, with key-based redaction.
 // CLAUDE.md (Privacy): never log invoice contents, amounts, OIBs or certificate data next to
@@ -120,10 +121,12 @@ function sanitize(value: unknown, depth: number, seen: WeakSet<object>): unknown
 }
 
 function describeError(error: Error): Record<string, unknown> {
-  // Error messages (notably from database drivers) can embed row values, so only the
-  // class name and the driver/system code are logged. Debug a failure by its code.
-  const code = (error as { code?: unknown }).code
-  return { name: error.name, ...(typeof code === 'string' ? { code: scrub(code) } : {}) }
+  // Error messages (notably from database drivers) can embed row values, and drizzle-orm's
+  // DrizzleQueryError message carries the bind parameters, so only the class name and the code
+  // are logged. The code is looked up along `.cause`, where the driver's SQLSTATE lives.
+  // Debug a failure by its code.
+  const code = errorCode(error)
+  return { name: error.name, ...(code !== undefined ? { code: scrub(code) } : {}) }
 }
 
 function threshold(): number {

@@ -95,15 +95,43 @@ describe('audit_log is append-only', () => {
     expect(rows[0]?.action).toBe('customer.created')
   })
 
-  it('has a BEFORE UPDATE OR DELETE row trigger', async () => {
+  it('has a BEFORE UPDATE OR DELETE row trigger and a BEFORE TRUNCATE statement trigger', async () => {
     const { rows } = await owner.query<{ def: string }>(
       `select pg_get_triggerdef(oid) as def from pg_trigger
-        where tgrelid = 'audit_log'::regclass and not tgisinternal`,
+        where tgrelid = 'audit_log'::regclass and not tgisinternal order by tgname`,
     )
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.def).toMatch(
-      /BEFORE (UPDATE OR DELETE|DELETE OR UPDATE) ON .*audit_log FOR EACH ROW/,
-    )
+    expect(rows).toHaveLength(2)
+    const defs = rows.map((r) => r.def)
+    expect(
+      defs.some((d) =>
+        /BEFORE (UPDATE OR DELETE|DELETE OR UPDATE) ON .*audit_log FOR EACH ROW/.test(d),
+      ),
+    ).toBe(true)
+    expect(defs.some((d) => /BEFORE TRUNCATE ON .*audit_log FOR EACH STATEMENT/.test(d))).toBe(true)
+  })
+
+  it('TRUNCATE is refused for the owner and for a superuser (N1)', async () => {
+    // pf_app has no TRUNCATE grant; the owner does hold it, so only the trigger stops it.
+    await expect(owner.query('truncate audit_log')).rejects.toMatchObject({
+      code: '23001',
+      message: expect.stringContaining('append-only'),
+    })
+    const admin = inject('clusterAdmin')
+    const superuser = new pg.Client({
+      host: '127.0.0.1',
+      port: admin.port,
+      user: CLUSTER_SUPERUSER,
+      password: admin.superuserPassword,
+      database: 'pf_test',
+    })
+    await superuser.connect()
+    try {
+      await expect(superuser.query('truncate audit_log')).rejects.toMatchObject({ code: '23001' })
+    } finally {
+      await superuser.end()
+    }
+    const { rows } = await asTenant(app, org.id, (c) => c.query('select 1 from audit_log'))
+    expect(rows.length).toBeGreaterThan(0)
   })
 
   it('the id is generated always: an explicit id is refused', async () => {

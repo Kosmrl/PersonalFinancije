@@ -1,3 +1,4 @@
+import type pg from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createRng, fakeOib, freshSeed } from '../helpers/fake'
 import {
@@ -72,6 +73,93 @@ describe('tenant table constraints', () => {
       expect(
         await sqlState(asTenant(app, 'o_missing', (c) => insertProfile(c, 'o_missing', rng))),
       ).toBe('23503')
+    })
+  })
+
+  describe('format CHECKs (defence in depth)', () => {
+    const profile = (c: pg.PoolClient, org: string, oib: string, country = 'HR') =>
+      c.query(
+        `insert into obrt_profiles
+           (organization_id, trade_name, owner_full_name, oib, street, postal_code, city, iban,
+            email, default_invoice_note, country_code)
+         values ($1, 'Test Obrt', 'Test Vlasnik', $2, 'Testna ulica 1', '10000', 'Zagreb',
+                 'HR1210010051863000160', 'obrt@example.test', 'Test note', $3)`,
+        [org, oib, country],
+      )
+
+    it('obrt_profiles.oib must be exactly 11 digits', async () => {
+      for (const oib of ['1234567890 ', '1234567890a', '12345 67890', 'abcdefghijk']) {
+        const org = await createOrg(owner)
+        expect(await sqlState(asTenant(app, org.id, (c) => profile(c, org.id, oib))), oib).toBe(
+          CHECK_VIOLATION,
+        )
+      }
+    })
+
+    it('obrt_profiles.country_code must be two capital letters', async () => {
+      for (const country of ['hr', 'H1', '1R']) {
+        const org = await createOrg(owner)
+        expect(
+          await sqlState(asTenant(app, org.id, (c) => profile(c, org.id, fakeOib(rng), country))),
+          country,
+        ).toBe(CHECK_VIOLATION)
+      }
+    })
+
+    it('customers.oib must be 11 digits when set; NULL is fine', async () => {
+      for (const oib of ['1234567890', '1234567890a', 'abcdefghijk']) {
+        expect(
+          await sqlState(
+            asTenant(app, a.id, (c) => insertCustomer(c, a.id, { kind: 'person', oib })),
+          ),
+          oib,
+        ).toBe(CHECK_VIOLATION)
+      }
+      await asTenant(app, a.id, (c) => insertCustomer(c, a.id, { kind: 'person', oib: null }))
+    })
+
+    it('customers.country_code must be two capital letters', async () => {
+      for (const countryCode of ['hr', 'H1']) {
+        expect(
+          await sqlState(asTenant(app, a.id, (c) => insertCustomer(c, a.id, { countryCode }))),
+          countryCode,
+        ).toBe(CHECK_VIOLATION)
+      }
+    })
+
+    it('items.currency must be three capital letters', async () => {
+      for (const currency of ['eur', 'EU1', 'E R']) {
+        expect(
+          await sqlState(
+            asTenant(app, a.id, (c) =>
+              c.query(
+                `insert into items (organization_id, name, unit_code, unit_price, currency)
+                 values ($1, 'x', 'H87', '1', $2)`,
+                [a.id, currency],
+              ),
+            ),
+          ),
+          currency,
+        ).toBe(CHECK_VIOLATION)
+      }
+    })
+
+    it('items.kpd_code must be six digits when set; NULL is fine', async () => {
+      const insert = (c: pg.PoolClient, kpd: string | null) =>
+        c.query(
+          `insert into items (organization_id, name, unit_code, unit_price, kpd_code)
+           values ($1, 'x', 'H87', '1', $2)`,
+          [a.id, kpd],
+        )
+      for (const kpd of ['62011', 'a20111', '62.011']) {
+        expect(await sqlState(asTenant(app, a.id, (c) => insert(c, kpd))), kpd).toBe(
+          CHECK_VIOLATION,
+        )
+      }
+      await asTenant(app, a.id, async (c) => {
+        await insert(c, '620111')
+        await insert(c, null)
+      })
     })
   })
 

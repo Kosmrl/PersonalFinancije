@@ -48,6 +48,10 @@ export const customers = pgTable(
       table.organizationId,
       sql`lower(${table.name})`,
     ),
+    // Structural format only (defence in depth); NULL passes. The OIB check digit is validated in
+    // the actions.
+    check('customers_oib_format', sql`${table.oib} ~ '^[0-9]{11}$'`),
+    check('customers_country_code_format', sql`${table.countryCode} ~ '^[A-Z]{2}$'`),
     check('customers_kind_check', sql`${table.kind} in ('person', 'business')`),
     check(
       'customers_hr_business_requires_oib',

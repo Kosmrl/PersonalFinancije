@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, inject, it, vi } from 'vitest'
 import { createRng, fakeOib, freshSeed } from '../helpers/fake'
+import { testOrgContext } from '../helpers/org-context'
 import {
   addMember,
   appPool,
@@ -82,7 +83,7 @@ describe('tenant context helpers', () => {
 
   describe('withTenant', () => {
     it('scopes the transaction to the organization', async () => {
-      const id = await tenant.withTenant({ orgId: orgA.id }, async (tx) => {
+      const id = await tenant.withTenant(testOrgContext({ orgId: orgA.id }), async (tx) => {
         const { rows } = await tx.execute<{ org: string }>(
           (await import('drizzle-orm')).sql`select current_setting('app.org_id', true) as org`,
         )
@@ -102,7 +103,7 @@ describe('tenant context helpers', () => {
     it("cannot write another organization's rows, and a failure rolls everything back", async () => {
       const { customers } = await import('@/server/db/schema')
       await expect(
-        tenant.withTenant({ orgId: orgA.id }, async (tx) => {
+        tenant.withTenant(testOrgContext({ orgId: orgA.id }), async (tx) => {
           await tx
             .insert(customers)
             .values({ organizationId: orgA.id, kind: 'person', name: 'Rolled back' })
@@ -117,22 +118,27 @@ describe('tenant context helpers', () => {
       expect(rows).toHaveLength(0)
     })
 
-    it('the setting does not outlive the transaction', async () => {
-      await tenant.withTenant({ orgId: orgA.id }, async () => {})
-      const { rows } = await client
-        .getPool()
-        .query<{ n: string }>('select count(*) as n from customers')
-      expect(rows[0]?.n).toBe('0')
+    // "The setting does not outlive the transaction" is covered by rls.test.ts on a
+    // single-connection pool; here it would run on a 10-connection pool and could pass vacuously.
+
+    it('does not accept a bare { orgId } object (compile-time brand)', () => {
+      // Never invoked: the point is that the line below fails typecheck without the directive.
+      const bare = () =>
+        // @ts-expect-error OrgContext is branded; only requireOrgContext can mint one.
+        tenant.withTenant({ orgId: orgA.id }, async () => {})
+      expect(bare).toBeTypeOf('function')
     })
 
     it('refuses an empty organization id', async () => {
-      await expect(tenant.withTenant({ orgId: '' }, async () => {})).rejects.toThrow()
+      await expect(
+        tenant.withTenant(testOrgContext({ orgId: '' }), async () => {}),
+      ).rejects.toThrow()
     })
   })
 
   describe('recordAudit', () => {
     it('writes one row with field names and the actor, in the tenant transaction', async () => {
-      const ctx = { orgId: orgA.id, userId: userA.id }
+      const ctx = testOrgContext({ orgId: orgA.id, userId: userA.id })
       await tenant.withTenant(ctx, (tx) =>
         audit.recordAudit(tx, ctx, {
           action: 'customer.updated',
@@ -163,7 +169,7 @@ describe('tenant context helpers', () => {
     })
 
     it('rolls back with the surrounding transaction', async () => {
-      const ctx = { orgId: orgA.id, userId: userA.id }
+      const ctx = testOrgContext({ orgId: orgA.id, userId: userA.id })
       await expect(
         tenant.withTenant(ctx, async (tx) => {
           await audit.recordAudit(tx, ctx, {
@@ -180,16 +186,18 @@ describe('tenant context helpers', () => {
       expect(rows).toHaveLength(0)
     })
 
-    it('rejects values passed as field names (OIB, e-mail, names with spaces)', async () => {
-      const ctx = { orgId: orgA.id, userId: userA.id }
-      for (const bad of [fakeOib(rng), 'someone@example.test', 'Marko Marić', 'a=b']) {
+    it('rejects values passed as field names (OIB, e-mail, IBAN, a name, free text)', async () => {
+      const ctx = testOrgContext({ orgId: orgA.id, userId: userA.id })
+      const bad = [fakeOib(rng), 'someone@example.test', 'HR1210010051863000160', 'Ana', 'a=b']
+      for (const value of bad) {
         await expect(
           tenant.withTenant(ctx, (tx) =>
             audit.recordAudit(tx, ctx, {
               action: 'customer.updated',
               entityType: 'customer',
               entityId: 'bad-1',
-              changedFields: [bad],
+              // Deliberately not a column name; the cast is what a bug would do.
+              changedFields: [value as never],
             }),
           ),
         ).rejects.toThrow(/field names/)
@@ -201,18 +209,14 @@ describe('tenant context helpers', () => {
     })
 
     it('cannot record an entry for another organization', async () => {
-      const ctxA = { orgId: orgA.id, userId: userA.id }
+      const ctxA = testOrgContext({ orgId: orgA.id, userId: userA.id })
       await expect(
         tenant.withTenant(ctxA, (tx) =>
-          audit.recordAudit(
-            tx,
-            { orgId: orgB.id, userId: userA.id },
-            {
-              action: 'customer.created',
-              entityType: 'customer',
-              entityId: 'x',
-            },
-          ),
+          audit.recordAudit(tx, testOrgContext({ orgId: orgB.id, userId: userA.id }), {
+            action: 'customer.created',
+            entityType: 'customer',
+            entityId: 'x',
+          }),
         ),
       ).rejects.toThrow()
     })
