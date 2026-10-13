@@ -1,10 +1,12 @@
 import 'server-only'
 import { headers } from 'next/headers'
-import { redirect } from 'next/navigation'
+import { and, eq } from 'drizzle-orm'
+import { notFound, redirect } from 'next/navigation'
 import { cache } from 'react'
+import { forbidden, type ActionFailure } from '@/server/actions/result'
+import { getDb } from '@/server/db/client'
+import { member, organization } from '@/server/db/schema'
 import { getAuth } from './auth'
-
-// requireOrgContext (organization membership, roles) arrives with build-sequence step 5.
 
 /** The current session from the request cookies, or null. Memoized per request. */
 export const getSession = cache(async () => {
@@ -25,3 +27,53 @@ export async function requireUser() {
 }
 
 export type AuthedUser = Awaited<ReturnType<typeof requireUser>>['user']
+
+export const ORG_ROLES = ['owner', 'accountant', 'member'] as const
+export type OrgRole = (typeof ORG_ROLES)[number]
+
+/** The verified tenant context: pass it to withTenant, recordAudit and the queries. */
+export type OrgContext = {
+  orgId: string
+  orgSlug: string
+  userId: string
+  role: OrgRole
+}
+
+// Better Auth stores a member's role as a string that may list several roles separated by commas.
+// The effective role is the most privileged known one; anything unknown grants nothing.
+function effectiveRole(stored: string): OrgRole | null {
+  const held = stored.split(',').map((part) => part.trim())
+  return ORG_ROLES.find((role) => held.includes(role)) ?? null
+}
+
+/**
+ * Authorization gate for organization actions and pages (plan: shared server-action contract).
+ *
+ * The membership is read from the database on every call: the session's "active organization" and
+ * anything else the client can influence are never trusted. A user who is not a member of the
+ * organization, and an organization that does not exist, are indistinguishable: both end in
+ * notFound(). A member whose role is not in `roles` gets the Croatian refusal result. Without
+ * `roles` every role is allowed (membership is enough).
+ *
+ * Better Auth tables have no row-level security, so this lookup uses the plain pool; tenant
+ * tables are reached afterwards only through withTenant(ctx, ...).
+ */
+export async function requireOrgContext(
+  orgSlug: string,
+  options: { roles?: readonly OrgRole[] } = {},
+): Promise<{ ok: true; ctx: OrgContext } | ActionFailure> {
+  const { user } = await requireUser()
+
+  const [row] = await getDb()
+    .select({ orgId: organization.id, orgSlug: organization.slug, role: member.role })
+    .from(member)
+    .innerJoin(organization, eq(organization.id, member.organizationId))
+    .where(and(eq(organization.slug, orgSlug), eq(member.userId, user.id)))
+    .limit(1)
+  if (!row) notFound()
+
+  const role = effectiveRole(row.role)
+  if (!role || (options.roles && !options.roles.includes(role))) return forbidden()
+
+  return { ok: true, ctx: { orgId: row.orgId, orgSlug: row.orgSlug, userId: user.id, role } }
+}

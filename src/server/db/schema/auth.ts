@@ -1,9 +1,9 @@
 import 'server-only'
 
 // Generated with the Better Auth CLI (organization, twoFactor plugins, database rate limiting;
-// Better Auth 1.7.x), then adjusted by hand: `import 'server-only'` and timestamptz columns
-// (CLAUDE.md: timestamps are stored in UTC with time zone). Regenerate with
-// `npx @better-auth/cli generate` and re-apply both adjustments. These tables have no RLS;
+// Better Auth 1.7.x), then adjusted by hand: `import 'server-only'`, timestamptz columns
+// (CLAUDE.md: timestamps are stored in UTC with time zone) and the N6 uniqueness fixes below.
+// Regenerate with `npx @better-auth/cli generate` and re-apply these adjustments. These tables have no RLS;
 // pf_app gets plain grants in the auth migration.
 
 import { relations } from 'drizzle-orm'
@@ -15,7 +15,7 @@ import {
   boolean,
   integer,
   index,
-  uniqueIndex,
+  unique,
 } from 'drizzle-orm/pg-core'
 
 export const user = pgTable('user', {
@@ -92,18 +92,16 @@ export const verification = pgTable(
   (table) => [index('verification_identifier_idx').on(table.identifier)],
 )
 
-export const organization = pgTable(
-  'organization',
-  {
-    id: text('id').primaryKey(),
-    name: text('name').notNull(),
-    slug: text('slug').notNull().unique(),
-    logo: text('logo'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
-    metadata: text('metadata'),
-  },
-  (table) => [uniqueIndex('organization_slug_uidx').on(table.slug)],
-)
+// The slug is unique through the column constraint alone (the generated schema also carried a
+// duplicate unique index, dropped in 0004; review item N6).
+export const organization = pgTable('organization', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  logo: text('logo'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  metadata: text('metadata'),
+})
 
 export const member = pgTable(
   'member',
@@ -121,6 +119,8 @@ export const member = pgTable(
   (table) => [
     index('member_organizationId_idx').on(table.organizationId),
     index('member_userId_idx').on(table.userId),
+    // One membership per user and organization (review item N6).
+    unique('member_organization_id_user_id_unique').on(table.organizationId, table.userId),
   ],
 )
 
@@ -161,7 +161,9 @@ export const twoFactor = pgTable(
   },
   (table) => [
     index('twoFactor_secret_idx').on(table.secret),
-    index('twoFactor_userId_idx').on(table.userId),
+    // One TOTP enrollment per user; the unique constraint also serves lookups by user_id, so the
+    // generated non-unique index on user_id is gone (review item N6).
+    unique('two_factor_user_id_unique').on(table.userId),
   ],
 )
 

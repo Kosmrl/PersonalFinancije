@@ -15,6 +15,27 @@
       "when": 1791872908140,
       "tag": "0001_auth_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791877157556,
+      "tag": "0002_tenant_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791877163637,
+      "tag": "0003_rls_grants_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791877189933,
+      "tag": "0004_auth_uniqueness",
+      "breakpoints": true
     }
   ]
 }
