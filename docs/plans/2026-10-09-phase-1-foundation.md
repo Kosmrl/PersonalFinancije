@@ -46,7 +46,7 @@ All timestamps are `timestamptz`, stored in UTC and shown in `Europe/Zagreb`. Ph
 - `pf_app` is the runtime role (`DATABASE_URL`). It is `NOSUPERUSER NOBYPASSRLS` and not the owner of any table.
 - `pf_definer` is a `NOLOGIN NOSUPERUSER BYPASSRLS` role granted to `pf_owner`. It owns `SECURITY DEFINER` functions that must look across tenants (`oib_is_registered`), because under `FORCE ROW LEVEL SECURITY` a function owned by `pf_owner` only sees the caller's org. It gets column-level `SELECT (oib) ON obrt_profiles` and nothing else. Only a superuser can create a `BYPASSRLS` role, so it is created in `scripts/db/init.sql` (and in every environment's bootstrap), not in a migration. *(Added after the step 2 review.)*
 - Definer functions: `REVOKE EXECUTE … FROM PUBLIC`, `GRANT EXECUTE` to `pf_app` only, `SET search_path = pg_catalog, pg_temp`, and schema-qualified names inside.
-- Transferring a function to `pf_definer` requires the new owner to have `CREATE` on the schema. The migration (run as `pf_owner`) does, in order: `GRANT CREATE ON SCHEMA public TO pf_definer`, `ALTER FUNCTION public.oib_is_registered(text) OWNER TO pf_definer`, `REVOKE CREATE ON SCHEMA public FROM pf_definer`. Ownership survives the revoke. An integration test must prove the function sees another org's OIB under FORCE RLS. *(Added after the step 2 re-review.)*
+- Transferring a function to `pf_definer` requires the new owner to have `CREATE` on the schema. The migration (run as `pf_owner`) does, in order (set the EXECUTE grants on `oib_is_registered` before transferring its ownership to `pf_definer`): `GRANT CREATE ON SCHEMA public TO pf_definer`, `ALTER FUNCTION public.oib_is_registered(text) OWNER TO pf_definer`, `REVOKE CREATE ON SCHEMA public FROM pf_definer`. Ownership survives the revoke. An integration test must prove the function sees another org's OIB under FORCE RLS. *(Added after the step 2 re-review.)*
 - Under FORCE RLS, data migrations run by `pf_owner` see 0 rows unless they set `app.org_id`.
 - Grants:
   - `pf_app` gets `SELECT, INSERT, UPDATE, DELETE` on Better Auth tables;
@@ -133,6 +133,7 @@ Index: `(organization_id, lower(name))`. RLS as above.
 | `request_id` | `text NULL` | |
 | `occurred_at` | `timestamptz NOT NULL DEFAULT now()` | |
 
+- Two further audit actions exist beyond the list above: `member.invitation_revoked` and `member.joined`.
 - Append-only: a `BEFORE UPDATE OR DELETE` trigger raises an exception, and `pf_app` has no UPDATE or DELETE grant.
 - RLS: SELECT and INSERT policies on `organization_id`.
 - Index: `(organization_id, occurred_at DESC)`.

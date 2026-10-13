@@ -2,7 +2,7 @@ import 'server-only'
 import { getTableColumns } from 'drizzle-orm'
 import type { Tx } from '@/server/db/tenant'
 import { auditLog, customers, items, obrtProfiles } from '@/server/db/schema'
-import type { OrgContext } from '@/server/auth/context'
+import { assertOrgContext, type OrgContext } from '@/server/auth/context'
 
 // The audit trail is append-only and can never be erased, so what goes into `changed_fields` is
 // restricted twice: by type (and a runtime allowlist) to the real column names of the entity, and
@@ -44,31 +44,46 @@ type EntityFields = {
 
 export type AuditEntity = keyof EntityFields
 
-/** Every action the application records (plan: `audit_log.action`). */
-export type AuditAction =
-  | 'org.created'
-  | 'obrt_profile.updated'
-  | 'member.invited'
-  | 'member.invitation_revoked'
-  | 'member.joined'
-  | 'member.role_changed'
-  | 'member.removed'
-  | 'customer.created'
-  | 'customer.updated'
-  | 'customer.archived'
-  | 'customer.restored'
-  | 'item.created'
-  | 'item.updated'
-  | 'item.archived'
-  | 'item.restored'
+/** The entity each action is about; `entityType` must match, so a mismatch fails to compile. */
+export type ActionEntity = {
+  'org.created': 'organization'
+  'obrt_profile.updated': 'obrt_profile'
+  'member.invited': 'invitation'
+  'member.invitation_revoked': 'invitation'
+  'member.joined': 'member'
+  'member.role_changed': 'member'
+  'member.removed': 'member'
+  'customer.created': 'customer'
+  'customer.updated': 'customer'
+  'customer.archived': 'customer'
+  'customer.restored': 'customer'
+  'item.created': 'item'
+  'item.updated': 'item'
+  'item.archived': 'item'
+  'item.restored': 'item'
+}
 
-export type AuditEntry<E extends AuditEntity = AuditEntity> = {
-  action: AuditAction
-  entityType: E
+/** Every action the application records (plan: `audit_log.action`). */
+export type AuditAction = keyof ActionEntity
+
+// requestId is deliberately not an input: callers (and request headers) could put anything in it.
+// The column stays NULL until a server-generated correlation id exists.
+export type AuditEntry<A extends AuditAction = AuditAction> = {
+  action: A
+  entityType: ActionEntity[A]
+  /** A UUID or a Better Auth id. Never an e-mail, OIB or name (see ENTITY_ID). */
   entityId: string
   /** Field NAMES (columns of the entity) that changed. Never values (CLAUDE.md, Privacy). */
-  changedFields?: readonly EntityFields[E][]
-  requestId?: string
+  changedFields?: readonly EntityFields[ActionEntity[A]][]
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Better Auth ids are random alphanumeric strings. All-digit strings are refused (an OIB is 11
+// digits) and `@` never matches the class (an e-mail address).
+const AUTH_ID = /^(?!\d+$)[A-Za-z0-9]{16,64}$/
+
+function isEntityId(value: unknown): boolean {
+  return typeof value === 'string' && (UUID.test(value) || AUTH_ID.test(value))
 }
 
 // Second line of defence only. It accepts any identifier-shaped token, so on its own it would
@@ -82,11 +97,16 @@ const FIELD_NAME = /^[A-Za-z][A-Za-z0-9_.]{0,63}$/
  * `tx` must come from withTenant for the same organization, otherwise row-level security
  * rejects the insert.
  */
-export async function recordAudit<E extends AuditEntity>(
+export async function recordAudit<A extends AuditAction>(
   tx: Tx,
   ctx: OrgContext,
-  entry: AuditEntry<E>,
+  entry: AuditEntry<A>,
 ): Promise<void> {
+  assertOrgContext(ctx)
+  if (!isEntityId(entry.entityId)) {
+    // Never repeats the value: it may be an e-mail address or an OIB.
+    throw new Error('recordAudit: entityId must be an entity id')
+  }
   if (!Object.hasOwn(ENTITY_FIELDS, entry.entityType)) {
     throw new Error('recordAudit: unknown entity type')
   }
@@ -105,6 +125,5 @@ export async function recordAudit<E extends AuditEntity>(
     entityType: entry.entityType,
     entityId: entry.entityId,
     changedFields,
-    requestId: entry.requestId ?? null,
   })
 }

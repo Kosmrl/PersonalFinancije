@@ -134,6 +134,21 @@ describe('tenant context helpers', () => {
         tenant.withTenant(testOrgContext({ orgId: '' }), async () => {}),
       ).rejects.toThrow()
     })
+
+    it('rejects a spread copy, an Object.assign copy and a cast object at runtime', async () => {
+      const real = testOrgContext({ orgId: orgA.id })
+      const copies = [
+        { ...real, orgId: orgB.id },
+        Object.assign({}, real, { orgId: orgB.id }),
+        { orgId: orgB.id, orgSlug: 's', userId: 'u', role: 'owner' } as unknown as typeof real,
+      ]
+      for (const forged of copies) {
+        await expect(tenant.withTenant(forged, async () => 1)).rejects.toThrow(
+          'Invalid organization context',
+        )
+      }
+      await expect(tenant.withTenant(real, async () => 1)).resolves.toBe(1)
+    })
   })
 
   describe('recordAudit', () => {
@@ -143,9 +158,8 @@ describe('tenant context helpers', () => {
         audit.recordAudit(tx, ctx, {
           action: 'customer.updated',
           entityType: 'customer',
-          entityId: 'c-1',
+          entityId: 'c1c1c1c1c1c1c1c1c1c1',
           changedFields: ['name', 'email'],
-          requestId: 'req-1',
         }),
       )
       const { rows } = await asTenant(app, orgA.id, (c) =>
@@ -153,9 +167,9 @@ describe('tenant context helpers', () => {
           action: string
           changed_fields: string[]
           actor_user_id: string
-          request_id: string
+          request_id: string | null
         }>(
-          `select action, changed_fields, actor_user_id, request_id from audit_log where entity_id = 'c-1'`,
+          `select action, changed_fields, actor_user_id, request_id from audit_log where entity_id = 'c1c1c1c1c1c1c1c1c1c1'`,
         ),
       )
       expect(rows).toEqual([
@@ -163,7 +177,7 @@ describe('tenant context helpers', () => {
           action: 'customer.updated',
           changed_fields: ['name', 'email'],
           actor_user_id: userA.id,
-          request_id: 'req-1',
+          request_id: null,
         },
       ])
     })
@@ -175,7 +189,7 @@ describe('tenant context helpers', () => {
           await audit.recordAudit(tx, ctx, {
             action: 'item.created',
             entityType: 'item',
-            entityId: 'rb-1',
+            entityId: 'rb1rb1rb1rb1rb1rb1rb1',
           })
           throw new Error('boom')
         }),
@@ -195,7 +209,7 @@ describe('tenant context helpers', () => {
             audit.recordAudit(tx, ctx, {
               action: 'customer.updated',
               entityType: 'customer',
-              entityId: 'bad-1',
+              entityId: 'bad1bad1bad1bad1bad1',
               // Deliberately not a column name; the cast is what a bug would do.
               changedFields: [value as never],
             }),
@@ -215,7 +229,7 @@ describe('tenant context helpers', () => {
           audit.recordAudit(tx, testOrgContext({ orgId: orgB.id, userId: userA.id }), {
             action: 'customer.created',
             entityType: 'customer',
-            entityId: 'x',
+            entityId: 'x1x1x1x1x1x1x1x1x1x1',
           }),
         ),
       ).rejects.toThrow()

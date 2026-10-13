@@ -48,6 +48,34 @@ export type OrgContext = {
   readonly [orgContextBrand]: true
 }
 
+// Runtime brand. The type brand above stops a bare literal, but a spread, Object.assign or an
+// `as OrgContext` cast still compiles, and row-level security trusts whatever orgId reaches
+// app.org_id. Every genuine context is registered here by requireOrgContext (or the test minter);
+// withTenant and recordAudit call assertOrgContext, and a copy is a new object, so it fails.
+const mintedContexts = new WeakSet<object>()
+
+/** Throws unless `ctx` is the very object minted by requireOrgContext. The message holds no values. */
+export function assertOrgContext(ctx: unknown): asserts ctx is OrgContext {
+  if (typeof ctx !== 'object' || ctx === null || !mintedContexts.has(ctx)) {
+    throw new Error('Invalid organization context')
+  }
+}
+
+function mint(fields: Omit<OrgContext, typeof orgContextBrand>): OrgContext {
+  const ctx = Object.freeze({ ...fields }) as OrgContext
+  mintedContexts.add(ctx)
+  return ctx
+}
+
+/**
+ * Test-only minter, used through tests/helpers/org-context.ts. Refuses to run outside Vitest, so
+ * a production import of it is useless.
+ */
+export function mintOrgContextForTests(fields: Omit<OrgContext, typeof orgContextBrand>): OrgContext {
+  if (process.env.VITEST !== 'true') throw new Error('Test-only function')
+  return mint(fields)
+}
+
 // Better Auth stores a member's role as a string that may list several roles separated by commas.
 // The effective role is the most privileged known one; anything unknown grants nothing.
 function effectiveRole(stored: string): OrgRole | null {
@@ -85,6 +113,6 @@ export async function requireOrgContext(
   if (!role || (options.roles && !options.roles.includes(role))) return forbidden()
 
   // The only place a context is minted: the membership was just read from the database.
-  const ctx = { orgId: row.orgId, orgSlug: row.orgSlug, userId: user.id, role } as OrgContext
+  const ctx = mint({ orgId: row.orgId, orgSlug: row.orgSlug, userId: user.id, role })
   return { ok: true, ctx }
 }

@@ -4,7 +4,7 @@ import type { ExtractTablesWithRelations } from 'drizzle-orm'
 import type { NodePgQueryResultHKT } from 'drizzle-orm/node-postgres'
 import type { PgTransaction } from 'drizzle-orm/pg-core'
 import { getDb } from './client'
-import type { OrgContext } from '@/server/auth/context'
+import { assertOrgContext, type OrgContext } from '@/server/auth/context'
 import type * as schema from './schema'
 
 export type Tx = PgTransaction<
@@ -20,7 +20,7 @@ export type Tx = PgTransaction<
  * role sees no tenant row at all.
  *
  * `ctx` must come from requireOrgContext (membership already verified); never build it from
- * request input. OrgContext is branded, so a bare `{ orgId }` object does not compile. Better
+ * request input. OrgContext is branded at the type level and registered at runtime (assertOrgContext), so a bare, spread or cast object is rejected. Better
  * Auth tables have no RLS and are read on the plain pool.
  *
  * Never call withTenant from inside a Better Auth hook (databaseHooks, organization hooks) that
@@ -29,6 +29,7 @@ export type Tx = PgTransaction<
  * deadlock on shared rows (review item N7).
  */
 export async function withTenant<T>(ctx: OrgContext, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  assertOrgContext(ctx)
   if (!ctx.orgId) throw new Error('withTenant requires an organization id')
   return getDb().transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.org_id', ${ctx.orgId}, true)`)

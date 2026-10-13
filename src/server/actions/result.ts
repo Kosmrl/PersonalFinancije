@@ -1,6 +1,7 @@
 import 'server-only'
 import { unstable_rethrow } from 'next/navigation'
 import { log } from '@/server/log'
+import type { AuditAction } from '@/server/audit/record'
 
 // Shared server-action contract (plan: "Shared contract for every server action"). Messages are
 // Croatian; no stack traces, SQL errors or other internals ever reach the client.
@@ -38,10 +39,19 @@ export function forbidden(): ActionFailure {
  *   drizzle-orm DrizzleQueryError message carries the bind parameters, i.e. personal data) and
  *   becomes the generic Croatian failure result.
  *
- * `name` identifies the action in the log; use a constant, never user input.
+ * `name` identifies the action in the log. It is typed as an audit action name or one of
+ * AuthActionName, so only constants compile; extend those unions for new actions.
  */
+export type AuthActionName =
+  | 'auth.sign_up'
+  | 'auth.sign_in'
+  | 'auth.verify_email'
+  | 'auth.reset_password'
+  | 'auth.two_factor'
+export type ActionName = AuditAction | AuthActionName
+
 export async function runAction<T>(
-  name: string,
+  name: ActionName,
   fn: () => Promise<ActionResult<T>>,
 ): Promise<ActionResult<T>> {
   try {

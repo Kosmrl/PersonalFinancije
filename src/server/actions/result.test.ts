@@ -20,11 +20,11 @@ afterEach(() => vi.restoreAllMocks())
 
 describe('runAction', () => {
   it('passes a result through unchanged', async () => {
-    expect(await runAction('test', async () => ok({ id: 1 }))).toEqual({
+    expect(await runAction('customer.created', async () => ok({ id: 1 }))).toEqual({
       ok: true,
       data: { id: 1 },
     })
-    expect(await runAction('test', async () => fail('Neispravan unos.'))).toEqual({
+    expect(await runAction('customer.created', async () => fail('Neispravan unos.'))).toEqual({
       ok: false,
       message: 'Neispravan unos.',
     })
@@ -33,7 +33,7 @@ describe('runAction', () => {
 
   it('rethrows redirect()', async () => {
     await expect(
-      runAction('test', async () => {
+      runAction('customer.created', async () => {
         redirect('/prijava')
       }),
     ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') })
@@ -42,7 +42,7 @@ describe('runAction', () => {
 
   it('rethrows notFound()', async () => {
     await expect(
-      runAction('test', async () => {
+      runAction('customer.created', async () => {
         notFound()
       }),
     ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_HTTP_ERROR_FALLBACK') })
@@ -59,7 +59,7 @@ describe('runAction', () => {
       ['Ana Horvat', '12345678903', 'ana.horvat@example.test'],
       pgError,
     )
-    const result = await runAction('createCustomer', async () => {
+    const result = await runAction('customer.created', async () => {
       throw error
     })
     expect(result).toEqual({ ok: false, message: GENERIC_ERROR_MESSAGE })
@@ -78,13 +78,13 @@ describe('runAction', () => {
     }
     expect(JSON.parse(logged)).toMatchObject({
       level: 'error',
-      action: 'createCustomer',
+      action: 'customer.created',
       error: { name: 'Error', code: '23505' },
     })
   })
 
   it('handles a thrown non-Error value', async () => {
-    const result = await runAction('test', async () => {
+    const result = await runAction('customer.created', async () => {
       throw 'plain string with ana.horvat@example.test'
     })
     expect(result).toEqual({ ok: false, message: GENERIC_ERROR_MESSAGE })

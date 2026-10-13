@@ -77,16 +77,45 @@ const bannedTenantSetting = [
   },
 ]
 
+// The patterns are regexes so that `.ts`/`.js` suffixes and relative paths match as well.
 const dbAccessPatterns = {
-  group: ['@/server/db/client', '@/server/db/tenant', '**/db/client', '**/db/tenant'],
+  regex: '(^|/)db/(client|tenant)(\.[cm]?[jt]sx?)?$',
   message:
     'Import the database client and withTenant only from src/server/db, auth, audit, queries.ts or actions.ts files. Everything else goes through a queries.ts or actions.ts module.',
 }
 const schemaPatterns = {
-  group: ['@/server/db/schema', '@/server/db/schema/*', '**/db/schema', '**/db/schema/*'],
+  regex: '(^|/)db/schema(/.*|\.[cm]?[jt]sx?)?$',
   message:
     'Database schema modules are server-only; src/app and src/components must go through a queries.ts or actions.ts module (and types it exports).',
 }
+const testHelperPatterns = {
+  group: ['**/tests/**', '@/tests/**', 'tests/**'],
+  message: 'Test helpers (tests/**) must never be imported from application code.',
+}
+
+// Dynamic import() bypasses no-restricted-imports.
+const bannedDynamicDbImport = [
+  {
+    selector: 'ImportExpression[source.value=/db.(client|tenant|schema)/]',
+    message:
+      'Do not import the database client, withTenant or the schema dynamically; use a queries.ts or actions.ts module.',
+  },
+]
+
+// OrgContext is minted only by requireOrgContext (src/server/auth/context.ts). A cast would
+// forge one; the runtime brand (assertOrgContext) is the second line of defence.
+const orgCastMessage =
+  'Never cast to OrgContext: only requireOrgContext in src/server/auth/context.ts mints one (tests use tests/helpers/org-context.ts).'
+const bannedOrgContextCast = [
+  {
+    selector: "TSAsExpression > TSTypeReference[typeName.name='OrgContext']",
+    message: orgCastMessage,
+  },
+  {
+    selector: "TSTypeAssertion > TSTypeReference[typeName.name='OrgContext']",
+    message: orgCastMessage,
+  },
+]
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -109,7 +138,15 @@ const eslintConfig = defineConfig([
   {
     // Application code: the tenant setting is written only by withTenant.
     files: ['src/**/*.{ts,tsx}'],
-    rules: { 'no-restricted-syntax': ['error', ...bannedCoerce, ...bannedTenantSetting] },
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...bannedCoerce,
+        ...bannedTenantSetting,
+        ...bannedOrgContextCast,
+        ...bannedDynamicDbImport,
+      ],
+    },
   },
   {
     // No Number() coercion where amounts are parsed or validated.
@@ -121,7 +158,14 @@ const eslintConfig = defineConfig([
       'src/components/**/decimal-input.tsx',
     ],
     rules: {
-      'no-restricted-syntax': ['error', ...bannedCoerce, ...bannedNumber, ...bannedTenantSetting],
+      'no-restricted-syntax': [
+        'error',
+        ...bannedCoerce,
+        ...bannedNumber,
+        ...bannedTenantSetting,
+        ...bannedOrgContextCast,
+        ...bannedDynamicDbImport,
+      ],
     },
   },
   {
@@ -135,8 +179,17 @@ const eslintConfig = defineConfig([
         ...bannedNumber,
         ...bannedMoneyCoercions,
         ...bannedTenantSetting,
+        ...bannedOrgContextCast,
+        ...bannedDynamicDbImport,
       ],
     },
+  },
+  {
+    // Application code never imports test helpers. Later blocks that set no-restricted-imports
+    // repeat this pattern, because their options replace this one.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['**/*.test.{ts,tsx}'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [testHelperPatterns] }] },
   },
   {
     // Import boundaries: the database client and withTenant are reachable only from the data
@@ -153,13 +206,13 @@ const eslintConfig = defineConfig([
       'scripts/**',
       '**/*.test.{ts,tsx}',
     ],
-    rules: { 'no-restricted-imports': ['error', { patterns: [dbAccessPatterns] }] },
+    rules: { 'no-restricted-imports': ['error', { patterns: [dbAccessPatterns, testHelperPatterns] }] },
   },
   {
     files: ['src/app/**/*.{ts,tsx}', 'src/components/**/*.{ts,tsx}'],
     ignores: ['**/*.test.{ts,tsx}'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: [dbAccessPatterns, schemaPatterns] }],
+      'no-restricted-imports': ['error', { patterns: [dbAccessPatterns, schemaPatterns, testHelperPatterns] }],
     },
   },
   {
@@ -169,7 +222,34 @@ const eslintConfig = defineConfig([
     rules: { 'no-restricted-syntax': ['error', ...bannedCoerce] },
   },
   {
-    files: ['src/server/db/tenant.ts', 'src/server/**/*.test.ts', 'src/lib/money/**/*.test.ts'],
+    // The two files that may name what is banned elsewhere: tenant.ts writes the tenant setting,
+    // context.ts mints OrgContext.
+    files: ['src/server/db/tenant.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...bannedCoerce,
+        ...bannedNumber,
+        ...bannedMoneyCoercions,
+        ...bannedOrgContextCast,
+        ...bannedDynamicDbImport,
+      ],
+    },
+  },
+  {
+    files: ['src/server/auth/context.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...bannedCoerce,
+        ...bannedNumber,
+        ...bannedMoneyCoercions,
+        ...bannedTenantSetting,
+      ],
+    },
+  },
+  {
+    files: ['src/server/**/*.test.ts', 'src/lib/money/**/*.test.ts'],
     rules: {
       'no-restricted-syntax': ['error', ...bannedCoerce, ...bannedNumber, ...bannedMoneyCoercions],
     },
