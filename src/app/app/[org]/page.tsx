@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { CheckCircle2, Circle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { requireOrgContext, requireUser } from '@/server/auth/context'
-import { getObrtProfile } from '@/server/org/queries'
+import { getObrtProfile, getOnboardingCounts } from '@/server/org/queries'
 
 export const metadata: Metadata = { title: 'Nadzorna ploča' }
 
@@ -14,14 +14,17 @@ export default async function DashboardPage({ params }: { params: Promise<{ org:
   const { org } = await params
   const gate = await requireOrgContext(org)
   if (!gate.ok) notFound()
+  const orgSlug = gate.ctx.orgSlug
   const { user } = await requireUser()
-  const profile = await getObrtProfile(gate.ctx)
+  const [profile, counts] = await Promise.all([
+    getObrtProfile(gate.ctx),
+    getOnboardingCounts(gate.ctx),
+  ])
 
-  // The kupci and artikli checklist links arrive in step 9.
   const steps: Step[] = [
     { label: 'Podaci o obrtu', done: Boolean(profile) },
-    { label: 'Dodajte kupca', done: false },
-    { label: 'Dodajte artikl', done: false },
+    { label: 'Dodajte kupca', done: counts.customers > 0, href: `/app/${orgSlug}/kupci/novi` },
+    { label: 'Dodajte artikl', done: counts.items > 0, href: `/app/${orgSlug}/artikli/novi` },
     {
       label: 'Uključite dvofaktorsku prijavu',
       done: user.twoFactorEnabled === true,
@@ -53,9 +56,6 @@ export default async function DashboardPage({ params }: { params: Promise<{ org:
                 ) : (
                   <span className={step.done ? 'text-muted-foreground' : undefined}>
                     {step.label}
-                    {!step.href && !step.done ? (
-                      <span className="bg-muted ml-2 rounded px-1.5 py-0.5 text-xs">Uskoro</span>
-                    ) : null}
                   </span>
                 )}
               </li>

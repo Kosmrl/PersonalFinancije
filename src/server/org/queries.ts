@@ -1,9 +1,17 @@
 import 'server-only'
-import { and, asc, eq, gt, sql } from 'drizzle-orm'
+import { and, asc, count, eq, gt, sql } from 'drizzle-orm'
 import { orgIdOf, type OrgContext } from '@/server/auth/context'
 import { getDb } from '@/server/db/client'
 import { withTenant } from '@/server/db/tenant'
-import { invitation, member, obrtProfiles, organization, user } from '@/server/db/schema'
+import {
+  customers,
+  invitation,
+  items,
+  member,
+  obrtProfiles,
+  organization,
+  user,
+} from '@/server/db/schema'
 
 // Reads for the organization pages. Tenant tables (obrt_profiles) go through withTenant; Better
 // Auth tables (member, invitation, organization, user) have no row-level security and are read on
@@ -21,6 +29,27 @@ export async function getObrtProfile(ctx: OrgContext) {
       .where(eq(obrtProfiles.organizationId, orgIdOf(ctx)))
       .limit(1)
     return row ?? null
+  })
+}
+
+/**
+ * Counts for the dashboard checklist. Counts only, no row content; archived rows count too,
+ * because the step is "has added one", not "has one active".
+ */
+export async function getOnboardingCounts(
+  ctx: OrgContext,
+): Promise<{ customers: number; items: number }> {
+  return withTenant(ctx, async (tx) => {
+    const orgId = orgIdOf(ctx)
+    const [customerRow] = await tx
+      .select({ n: count() })
+      .from(customers)
+      .where(eq(customers.organizationId, orgId))
+    const [itemRow] = await tx
+      .select({ n: count() })
+      .from(items)
+      .where(eq(items.organizationId, orgId))
+    return { customers: customerRow?.n ?? 0, items: itemRow?.n ?? 0 }
   })
 }
 
