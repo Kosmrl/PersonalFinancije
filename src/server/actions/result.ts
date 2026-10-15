@@ -51,6 +51,7 @@ export type AuthActionName =
   | 'auth.two_factor'
   | 'member.invitation_declined'
   | 'customer.search'
+  | 'item.search'
 export type ActionName = AuditAction | AuthActionName
 
 export async function runAction<T>(

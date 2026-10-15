@@ -19,7 +19,7 @@ export function Sidebar({ orgSlug }: { orgSlug: string }) {
   const items: Item[] = [
     { label: 'Nadzorna ploča', href: base, icon: LayoutDashboard },
     { label: 'Kupci', href: `${base}/kupci`, icon: Users },
-    { label: 'Artikli', href: `${base}/artikli`, icon: Package, soon: true },
+    { label: 'Artikli', href: `${base}/artikli`, icon: Package },
     { label: 'Postavke', href: `${base}/postavke/obrt`, icon: Settings },
   ]
   const settings: Item[] = [

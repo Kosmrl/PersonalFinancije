@@ -8,7 +8,7 @@ export type {
   ParseFailure,
   ParseResult,
 } from './parse'
-export { formatCents, formatDecimal } from './format'
+export { decimalToInputText, formatCents, formatDecimal, formatDecimalPlain } from './format'
 export { lineTotalCents } from './line-total'
 export type { LineTotalInput } from './line-total'
 export { allocateCents } from './allocate'

@@ -228,7 +228,13 @@ export async function searchCustomers(input: unknown): Promise<ActionResult<Cust
     if (!gate.ok) return gate
     const raw = input as { q?: unknown; archived?: unknown; page?: unknown }
     const q = typeof raw.q === 'string' ? raw.q.trim().slice(0, 100) : ''
-    const page = typeof raw.page === 'number' && Number.isInteger(raw.page) ? raw.page : 1
+    const page =
+      typeof raw.page === 'number' &&
+      Number.isInteger(raw.page) &&
+      raw.page >= 1 &&
+      raw.page <= 1_000_000
+        ? raw.page
+        : 1
     return ok(await listCustomers(gate.ctx, { q, archived: raw.archived === true, page }))
   })
 }

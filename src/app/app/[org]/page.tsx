@@ -17,7 +17,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ org:
   const { user } = await requireUser()
   const profile = await getObrtProfile(gate.ctx)
 
-  // Kupci and artikli arrive in steps 7 and 8; until then those items are not links.
+  // The kupci and artikli checklist links arrive in step 9.
   const steps: Step[] = [
     { label: 'Podaci o obrtu', done: Boolean(profile) },
     { label: 'Dodajte kupca', done: false },

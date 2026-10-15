@@ -48,3 +48,25 @@ export function formatDecimal(value: string, currency = 'EUR'): string {
   const scale = Math.max(2, exact.decimalPlaces())
   return currencyFormatter(currency, scale).format(exact.toString() as `${number}`)
 }
+
+/**
+ * A decimal string as editable form text: comma as the decimal separator, no grouping, trailing
+ * zeros trimmed (`"0.125000"` -> `"0,125"`, `"12.500000"` -> `"12,5"`). parseDecimal accepts the
+ * result back unchanged. Used to prefill an edit form, never for storage or calculation.
+ */
+export function decimalToInputText(value: string): string {
+  return toDecimal(value).toString().replace('.', ',')
+}
+
+/**
+ * A decimal string in hr-HR grouping without a currency symbol, full precision with at least 2
+ * decimals (`"1234.5"` -> `"1.234,50"`). Display only (the blur formatting of decimal inputs).
+ */
+export function formatDecimalPlain(value: string): string {
+  const exact = toDecimal(value)
+  const scale = Math.max(2, exact.decimalPlaces())
+  return new Intl.NumberFormat(LOCALE, {
+    minimumFractionDigits: scale,
+    maximumFractionDigits: scale,
+  }).format(exact.toString() as `${number}`)
+}

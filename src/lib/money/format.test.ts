@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MoneyError } from './decimal'
-import { formatCents, formatDecimal } from './format'
+import { decimalToInputText, formatCents, formatDecimal, formatDecimalPlain } from './format'
 import { parseDecimal } from './parse'
 
 // Intl separates the amount and the currency symbol with a NBSP (or narrow NBSP), and since
@@ -166,5 +166,30 @@ describe('display formatting stays parseable (plan item 4)', () => {
         value,
       })
     }
+  })
+})
+
+describe('decimalToInputText and formatDecimalPlain', () => {
+  it.each([
+    ['0.125000', '0,125'],
+    ['12.500000', '12,5'],
+    ['50.000000', '50'],
+    ['1234.5', '1234,5'],
+    ['0.000000', '0'],
+  ])('decimalToInputText(%s) = %s, and parseDecimal reads it back', (stored, text) => {
+    expect(decimalToInputText(stored)).toBe(text)
+    const parsed = parseDecimal(text)
+    expect(parsed.ok && parsed.value).toBe(
+      stored.includes('.') ? stored.replace(/\.?0+$/, '') || '0' : stored,
+    )
+  })
+
+  it.each([
+    ['0.125', '0,125'],
+    ['1234.5', '1.234,50'],
+    ['12', '12,00'],
+    ['1234567.123456', '1.234.567,123456'],
+  ])('formatDecimalPlain(%s) = %s', (value, expected) => {
+    expect(plain(formatDecimalPlain(value))).toBe(expected)
   })
 })
