@@ -50,6 +50,7 @@ export type AuthActionName =
   | 'auth.reset_password'
   | 'auth.two_factor'
   | 'member.invitation_declined'
+  | 'customer.search'
 export type ActionName = AuditAction | AuthActionName
 
 export async function runAction<T>(

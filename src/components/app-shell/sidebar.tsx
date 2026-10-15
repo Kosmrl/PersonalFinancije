@@ -18,7 +18,7 @@ export function Sidebar({ orgSlug }: { orgSlug: string }) {
   const base = `/app/${orgSlug}`
   const items: Item[] = [
     { label: 'Nadzorna ploča', href: base, icon: LayoutDashboard },
-    { label: 'Kupci', href: `${base}/kupci`, icon: Users, soon: true },
+    { label: 'Kupci', href: `${base}/kupci`, icon: Users },
     { label: 'Artikli', href: `${base}/artikli`, icon: Package, soon: true },
     { label: 'Postavke', href: `${base}/postavke/obrt`, icon: Settings },
   ]
