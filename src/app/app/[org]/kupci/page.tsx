@@ -8,6 +8,7 @@ import { Pagination } from '@/components/common/pagination'
 import { buttonVariants } from '@/components/ui/button'
 import { requireOrgContext } from '@/server/auth/context'
 import { listCustomers } from '@/server/customers/queries'
+import { throwForE2e } from '@/server/test-hooks'
 
 export const metadata: Metadata = { title: 'Kupci' }
 
@@ -30,6 +31,7 @@ export default async function CustomersPage({
   const { ctx } = gate
 
   const query = await searchParams
+  throwForE2e(query.e2eError) // test-only hook, inert outside the e2e stack
   const showArchived = single(query.archived) === '1'
   const pageText = single(query.page)
   const pageParam = /^\d{1,6}$/.test(pageText) ? parseInt(pageText, 10) : 1

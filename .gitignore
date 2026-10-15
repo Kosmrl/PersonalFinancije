@@ -49,3 +49,6 @@ Thumbs.db
 
 # project-local PostgreSQL data (npm run db)
 .data/
+
+# e2e build output (scripts/e2e/stack.ts)
+.next-e2e/

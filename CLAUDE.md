@@ -25,7 +25,7 @@ Phasing and the regulatory requirements are in the roadmap plan in `docs/plans/`
 - typecheck: `npm run typecheck`
 - lint: `npm run lint`
 - test: `npm run test`
-- e2e: `npm run e2e`
+- e2e: `npm run e2e` (starts its own throwaway PostgreSQL, mail catcher and app on ports 3100 / 1125 / 1180; first run needs `npx playwright install chromium`)
 - build: `npm run build`
 - local PostgreSQL (foreground, Ctrl+C stops it): `npm run db`
 - local mail catcher (SMTP 1025, web UI and API on 1080): `npm run mail`

@@ -212,7 +212,7 @@ If step 4 fails, the org exists without a profile. The org layout detects a miss
 
 All run through `withTenant` after `requireOrgContext`:
 
-- `listCustomers(ctx, { q?, archived?: boolean, page })`: 50 per page ordered by `lower(name)`. `q` matches `name`, `oib` or `email` case-insensitively with `ILIKE`, after escaping `%`, `_` and `\`.
+- `listCustomers(ctx, { q?, archived?: boolean, page })`: 50 per page ordered by `lower(name)`. In the UI, "Prikaži arhivirane" shows active and archived customers together. `q` matches `name`, `oib` or `email` case-insensitively with `ILIKE`, after escaping `%`, `_` and `\`.
 - `getCustomer(ctx, id)`: `notFound()` if missing.
 - `listItems` and `getItem`: same pattern.
 - `getObrtProfile(ctx)`, `listMembers(ctx)`, `listPendingInvitations(ctx)`.
@@ -287,7 +287,8 @@ URL paths are Croatian because users see them (open question 5). Code identifier
 - `.prettierrc.json`, `postcss.config.mjs`, `components.json` (shadcn), `src/app/globals.css`
 - `vitest.config.ts`
   - projects: `unit` (node env, `src/**/*.test.ts`) and `integration` (`tests/integration/**`, globalSetup migrates `pf_test`)
-- `playwright.config.ts` (webServer `npm run dev`, baseURL from env)
+- `playwright.config.ts` (webServer runs `scripts/e2e/stack.ts`, baseURL `http://localhost:3100`)
+- `scripts/e2e/stack.ts`: self-contained e2e stack in one process: throwaway PostgreSQL 17 (temp dir, free port) with roles, `pf_e2e` database and migrations; the mail catcher on SMTP 1125 / API 1180; `next dev` on port 3100 with its own build directory (`NEXT_DIST_DIR=.next-e2e`). Every env var is passed explicitly, so `.env.local` is never used and a running `npm run dev` / `db` / `mail` does not clash. `PF_E2E=1` enables the test-only hooks in `src/server/test-hooks.ts` (never active in production); `next-env.d.ts` is restored on shutdown.
 - `docker-compose.yml`
   - `postgres:17` with `scripts/db/init.sql` mounted to create `pf_owner`, `pf_app`, `pf_dev` and `pf_test`
   - `axllent/mailpit` (SMTP 1025, UI 8025)
@@ -580,7 +581,9 @@ Only `EUR` is accepted for items in Phase 1. Any other code is rejected server-s
     - backup codes work once;
     - the reset-password token works once.
 
-**E2E (Playwright, Mailpit API for emails)**
+**E2E (Playwright, local mail catcher API for emails)**
+
+Runs against the self-contained stack from `scripts/e2e/stack.ts` (app 3100, SMTP 1125, mail API 1180, `PF_E2E=1` test hook), started by Playwright's `webServer`; `npm run e2e` needs nothing else running.
 
 15. Register → verify via the Mailpit link → onboarding with a generated fake OIB/IBAN → dashboard checklist → create a customer (person) and a business with OIB → create an item with price `0,125` → the list shows `0,125 €`.
 16. User B (separate org) opens user A's `/app/{slugA}/kupci` and `/app/{slugA}/kupci/{id}` → 404 page; no customer name from A is present in the HTML.
